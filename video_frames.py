@@ -139,11 +139,18 @@ def extract_keyframes(path: str, max_frames: int = MAX_FRAMES,
         if not times or times[0] >= MIN_GAP_SEC:
             wanted.append(0.0)                              # nothing near the start
         bounds = ([0.0] if wanted else []) + times + ([end] if end > (times[-1] if times else 0.0) else [])
+
+        # Very long, nearly static videos can otherwise be over-sampled at every 15s.
+        # Allow a wider seek cadence when there are only a few keyframes in a long span.
+        fill_step = MAX_GAP_SEC
+        if (not times or len(times) <= 2) and end > MAX_GAP_SEC * 2:
+            fill_step = MAX_GAP_SEC * 2
+
         for a, b in zip(bounds, bounds[1:]):
-            t = a + MAX_GAP_SEC
+            t = a + fill_step
             while t < b - MIN_GAP_SEC and len(kept) + len(wanted) < max_frames * 2:
                 wanted.append(t)
-                t += MAX_GAP_SEC
+                t += fill_step
         if wanted:
             vs.codec_context.skip_frame = "DEFAULT"
             for w in wanted:
