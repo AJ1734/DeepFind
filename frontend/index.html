@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+    <title>DeepFind</title>
+    <script>
+      // first paint in the saved colour theme (the app then loads the saved setting from the engine)
+      (function () {
+        try {
+          var c = localStorage.getItem("deepfind.theme.v1") || "auto";
+          if (c === "auto") c = window.matchMedia("(prefers-color-scheme: dark)").matches ? "midnight" : "daylight";
+          if (c !== "daylight") document.documentElement.setAttribute("data-theme", c);
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
