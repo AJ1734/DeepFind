@@ -43,8 +43,8 @@ SEEK_DECODE_LIMIT = 900  # frames decoded after a seek while looking for the wan
 @dataclass
 class Frame:
     time: float                  # seconds from the start
-    jpeg: bytes                  # the frame, shrunk, as JPEG
-    text_score: float = 0.0      # 0-1: share of strong horizontal edges (slides/screens score high)
+    jpeg: bytes                 # the frame, shrunk, as JPEG
+    text_score: float = 0.0     # 0-1: share of strong horizontal edges (slides/screens score high)
 
 
 @dataclass
@@ -132,6 +132,7 @@ def extract_keyframes(path: str, max_frames: int = MAX_FRAMES,
             if time.time() - started > scan_budget:        # pathological file: seeking takes over
                 logger.info("key-frame scan of %s stopped after %.0fs", path, scan_budget)
                 break
+
         # ---- 3: fill gaps longer than MAX_GAP_SEC by seeking ----------------------------------
         times = sorted(f.time for f in kept)
         end = out.duration if out.duration > 0 else (times[-1] if times else 0.0)
@@ -139,17 +140,19 @@ def extract_keyframes(path: str, max_frames: int = MAX_FRAMES,
         if not times or times[0] >= MIN_GAP_SEC:
             wanted.append(0.0)                              # nothing near the start
         bounds = ([0.0] if wanted else []) + times + ([end] if end > (times[-1] if times else 0.0) else [])
-        # Very long, nearly static videos can otherwise be over-sampled at every 15s.
-# Allow a wider seek cadence when there are only a few keyframes in a long span.
-fill_step = MAX_GAP_SEC
-if (not times or len(times) <= 2) and end > MAX_GAP_SEC * 2:
-    fill_step = MAX_GAP_SEC * 2
 
-for a, b in zip(bounds, bounds[1:]):
-    t = a + fill_step
-    while t < b - MIN_GAP_SEC and len(kept) + len(wanted) < max_frames * 2:
-        wanted.append(t)
-        t += fill_step
+        # Very long, nearly static videos can otherwise be over-sampled at every 15s.
+        # Allow a wider seek cadence when there are only a few keyframes in a long span.
+        fill_step = MAX_GAP_SEC
+        if (not times or len(times) <= 2) and end > MAX_GAP_SEC * 2:
+            fill_step = MAX_GAP_SEC * 2
+
+        for a, b in zip(bounds, bounds[1:]):
+            t = a + fill_step
+            while t < b - MIN_GAP_SEC and len(kept) + len(wanted) < max_frames * 2:
+                wanted.append(t)
+                t += fill_step
+
         if wanted:
             vs.codec_context.skip_frame = "DEFAULT"
             for w in wanted:
@@ -161,14 +164,14 @@ for a, b in zip(bounds, bounds[1:]):
                 if got is not None:
                     kept.append(_make(got[0], got[1]))
 
-    # ---- 4: cap -----------------------------------------------------------------------------
-    kept.sort(key=lambda f: f.time)
-    dedup: list[Frame] = []
-    for f in kept:                                       # a seek can land on an already-kept frame
-        if not dedup or f.time - dedup[-1].time >= 0.5:
-            dedup.append(f)
-    if len(dedup) > max_frames:
-        idx = sorted(set(np.linspace(0, len(dedup) - 1, max_frames).round().astype(int).tolist()))
-        dedup = [dedup[i] for i in idx]
-    out.frames = dedup
-    return out
+        # ---- 4: cap -----------------------------------------------------------------------------
+        kept.sort(key=lambda f: f.time)
+        dedup: list[Frame] = []
+        for f in kept:                                       # a seek can land on an already-kept frame
+            if not dedup or f.time - dedup[-1].time >= 0.5:
+                dedup.append(f)
+        if len(dedup) > max_frames:
+            idx = sorted(set(np.linspace(0, len(dedup) - 1, max_frames).round().astype(int).tolist()))
+            dedup = [dedup[i] for i in idx]
+        out.frames = dedup
+        return out
